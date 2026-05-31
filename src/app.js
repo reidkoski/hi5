@@ -9,15 +9,17 @@ const onxrloaded = () => {
   const audioCtx = new AudioCtx()
   let audioBuffer = null
   let audioPlayed = false
+  let realityReadyAt = null
+  const speechDelayMs = 2500
 
-  fetch('./assets/goblin-speech.m4a')
-    .then(r => r.arrayBuffer())
-    .then(buf => audioCtx.decodeAudioData(buf))
-    .then(decoded => { audioBuffer = decoded })
-    .catch(console.error)
-
-  const playAudio = () => {
-    if (audioPlayed || !audioBuffer || audioCtx.state !== 'running') return
+  const tryPlayAudio = () => {
+    if (audioPlayed || !audioBuffer || !realityReadyAt) return
+    const waitMs = realityReadyAt + speechDelayMs - Date.now()
+    if (waitMs > 0) {
+      setTimeout(tryPlayAudio, waitMs)
+      return
+    }
+    if (audioCtx.state !== 'running') return
     audioPlayed = true
     const src = audioCtx.createBufferSource()
     src.buffer = audioBuffer
@@ -25,10 +27,23 @@ const onxrloaded = () => {
     src.start(0)
   }
 
-  // Resume AudioContext on first touch (landing page tap unlocks it)
-  document.addEventListener('touchstart', () => {
-    audioCtx.resume()
-  }, {once: true, capture: true})
+  fetch('./assets/goblin-speech.m4a')
+    .then(r => r.arrayBuffer())
+    .then(buf => audioCtx.decodeAudioData(buf))
+    .then(decoded => {
+      audioBuffer = decoded
+      tryPlayAudio()
+    })
+    .catch(console.error)
+
+  const unlockAudio = () => {
+    audioCtx.resume().then(tryPlayAudio).catch(console.error)
+  }
+
+  // Resume AudioContext on first interaction. The landing page tap usually unlocks it on mobile.
+  document.addEventListener('touchstart', unlockAudio, {once: true, capture: true})
+  document.addEventListener('pointerdown', unlockAudio, {once: true, capture: true})
+  document.addEventListener('click', unlockAudio, {once: true, capture: true})
 
   XR8.addCameraPipelineModule({
     name: 'goblin-systems',
@@ -39,7 +54,8 @@ const onxrloaded = () => {
     },
     onReality: {
       ready: () => {
-        setTimeout(playAudio, 2500)
+        realityReadyAt = Date.now()
+        setTimeout(tryPlayAudio, speechDelayMs)
       },
     },
   })

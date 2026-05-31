@@ -92,7 +92,7 @@
     },
     "2f4186f0-5825-4b3c-868a-24bc7945a328": {
       "id": "2f4186f0-5825-4b3c-868a-24bc7945a328",
-      "position": [0, 0, 0],
+      "position": [0, 0, -4],
       "rotation": [0, 0, 0, 1],
       "scale": [1, 1, 1],
       "geometry": null,
@@ -170,34 +170,55 @@
           "id": "d3f8a1b2-c4e5-6789-abcd-ef0123456789",
           "name": "walk-toward-camera",
           "parameters": {
-            "speed": 0.4,
-            "stopDistance": 2.0,
-            "startDelay": 2.5
-          }
-        },
-        "e4a9b3c1-d2e5-4789-bcde-f01234567890": {
-          "id": "e4a9b3c1-d2e5-4789-bcde-f01234567890",
-          "name": "position-animation",
-          "parameters": {
-            "fromY": -1.5,
-            "toY": 0,
-            "loop": false,
-            "easeOut": true,
-            "easingFunction": "Elastic",
-            "duration": 2000
+            "speed": 0.75,
+            "stopDistance": 1.25,
+            "startDelay": 1.4,
+            "fallHeight": 4,
+            "fallDuration": 1.2,
+            "staticTarget": "0c345ef1-4f1a-4027-b9aa-845805a9ad44"
           }
         }
       },
       "gltfModel": {
         "src": {
           "type": "asset",
-          "asset": "assets/goblin-walk.glb"
+          "asset": "assets/Meshy_AI_Gloomwing_Goblin_biped_Animation_Walking_withSkin.glb"
         },
-        "animationClip": "",
+        "animationClip": "Armature|walking_man|baselayer",
         "loop": true
       },
       "name": "Gloomwing Goblin",
       "order": 17.975890353169696,
+      "shadow": {
+        "castShadow": true
+      }
+    },
+    "0c345ef1-4f1a-4027-b9aa-845805a9ad44": {
+      "id": "0c345ef1-4f1a-4027-b9aa-845805a9ad44",
+      "position": [0, 0, -4],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1],
+      "geometry": null,
+      "material": null,
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {
+        "bbf9247e-2260-40c1-a789-b9d328ba2d1c": {
+          "id": "bbf9247e-2260-40c1-a789-b9d328ba2d1c",
+          "name": "static-goblin",
+          "parameters": {}
+        }
+      },
+      "gltfModel": {
+        "src": {
+          "type": "asset",
+          "asset": "assets/Meshy_AI_Gloomwing_Goblin_biped_Character_output.glb"
+        },
+        "animationClip": "",
+        "loop": false
+      },
+      "hidden": true,
+      "name": "Gloomwing Goblin Static",
+      "order": 18.075890353169696,
       "shadow": {
         "castShadow": true
       }
