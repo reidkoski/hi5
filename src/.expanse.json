@@ -92,7 +92,7 @@
     },
     "2f4186f0-5825-4b3c-868a-24bc7945a328": {
       "id": "2f4186f0-5825-4b3c-868a-24bc7945a328",
-      "position": [0, 0, -4],
+      "position": [0, 0, 0],
       "rotation": [0, 0, 0, 1],
       "scale": [1, 1, 1],
       "geometry": null,
@@ -159,7 +159,7 @@
     },
     "95b58dcb-9e2c-4f1c-beb8-a906c41d4ef2": {
       "id": "95b58dcb-9e2c-4f1c-beb8-a906c41d4ef2",
-      "position": [0, 0, 0],
+      "position": [0, 0, -4],
       "rotation": [0, 0, 0, 1],
       "scale": [1, 1, 1],
       "geometry": null,
@@ -174,8 +174,7 @@
             "stopDistance": 1.25,
             "startDelay": 1.4,
             "fallHeight": 4,
-            "fallDuration": 1.2,
-            "staticTarget": "0c345ef1-4f1a-4027-b9aa-845805a9ad44"
+            "fallDuration": 1.2
           }
         }
       },

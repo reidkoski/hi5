@@ -13,7 +13,6 @@ ecs.registerComponent({
     startDelay: ecs.f32,
     fallHeight: ecs.f32,
     fallDuration: ecs.f32,
-    staticTarget: 'eid',
   },
   schemaDefaults: {
     speed: 0.75,
@@ -36,8 +35,8 @@ ecs.registerComponent({
     const localPosition = ecs.math.vec3.zero()
 
     const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
-    const showStaticPose = (target: bigint, yaw: number) => {
-      const targetEid = target || staticGoblinQuery(world)[0]
+    const showStaticPose = (yaw: number) => {
+      const targetEid = staticGoblinQuery(world)[0]
       if (!targetEid) return
       const staticEntity = world.getEntity(targetEid)
       staticEntity.setLocalPosition({x: posX, y: landingY, z: posZ})
@@ -50,7 +49,7 @@ ecs.registerComponent({
       if (stopped) return
 
       const now = Date.now()
-      const {speed, stopDistance, startDelay, fallHeight, fallDuration, staticTarget} = schemaAttribute.get(eid)
+      const {speed, stopDistance, startDelay, fallHeight, fallDuration} = schemaAttribute.get(eid)
 
       if (!initialized) {
         world.transform.getLocalPosition(eid, localPosition)
@@ -91,7 +90,7 @@ ecs.registerComponent({
       const dist = Math.sqrt(dx * dx + dz * dz)
       if (dist <= stopDistance) {
         world.getEntity(eid).setLocalPosition({x: posX, y: landingY, z: posZ})
-        showStaticPose(staticTarget, Math.atan2(dx, dz))
+        showStaticPose(Math.atan2(dx, dz))
         stopped = true
         return
       }
