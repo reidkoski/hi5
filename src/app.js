@@ -19,7 +19,10 @@ const onxrloaded = () => {
       setTimeout(tryPlayAudio, waitMs)
       return
     }
-    if (audioCtx.state !== 'running') return
+    if (audioCtx.state !== 'running') {
+      audioCtx.resume().then(tryPlayAudio).catch(console.error)
+      return
+    }
     audioPlayed = true
     const src = audioCtx.createBufferSource()
     src.buffer = audioBuffer

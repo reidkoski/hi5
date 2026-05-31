@@ -16,7 +16,7 @@ ecs.registerComponent({
   },
   schemaDefaults: {
     speed: 0.75,
-    stopDistance: 1.25,
+    stopDistance: 2.0,
     startDelay: 1.4,
     fallHeight: 4,
     fallDuration: 1.2,
