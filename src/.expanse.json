@@ -193,7 +193,7 @@
           "type": "asset",
           "asset": "assets/goblin-walk.glb"
         },
-        "animationClip": "Armature|clip0|baselayer",
+        "animationClip": "",
         "loop": true
       },
       "name": "Gloomwing Goblin",

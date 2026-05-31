@@ -1,6 +1,5 @@
 import * as ecs from '@8thwall/ecs'
 
-// Camera position is set each frame by app.js via XR8's onUpdate pipeline
 declare const window: Window & {_camPos?: {x: number; y: number; z: number}}
 
 ecs.registerComponent({
@@ -14,6 +13,10 @@ ecs.registerComponent({
     let startTime: number | null = null
     let posX = 0
     let posZ = 0
+    // Smoothed camera position to reduce SLAM jitter
+    let smoothCamX = 0
+    let smoothCamZ = 0
+    let camInitialized = false
 
     defineState('active').initial().onTick(() => {
       if (startTime === null) startTime = Date.now()
@@ -24,8 +27,20 @@ ecs.registerComponent({
       const cam = window._camPos
       if (!cam) return
 
-      const dx = cam.x - posX
-      const dz = cam.z - posZ
+      // Initialize smooth cam on first frame
+      if (!camInitialized) {
+        smoothCamX = cam.x
+        smoothCamZ = cam.z
+        camInitialized = true
+      }
+
+      // Low-pass filter on camera position — smooths out SLAM jitter
+      const alpha = 0.05
+      smoothCamX += (cam.x - smoothCamX) * alpha
+      smoothCamZ += (cam.z - smoothCamZ) * alpha
+
+      const dx = smoothCamX - posX
+      const dz = smoothCamZ - posZ
       const dist = Math.sqrt(dx * dx + dz * dz)
       if (dist <= stopDistance) return
 

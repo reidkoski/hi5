@@ -4,34 +4,31 @@ const onxrloaded = () => {
   XR8.addCameraPipelineModule(LandingPage.pipelineModule())
   LandingPage.configure({mediaSrc: './assets/preview.jpg'})
 
-  const audio = new Audio('./assets/goblin-speech.m4a')
-  audio.preload = 'auto'
-  let unlocked = false
-  let arReady = false
+  // Web Audio API — more reliable than HTMLAudioElement on iOS
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  const audioCtx = new AudioCtx()
+  let audioBuffer = null
+  let audioPlayed = false
 
-  const tryPlay = () => {
-    if (unlocked && arReady) {
-      audio.muted = false
-      audio.play().catch(console.error)
-    }
+  fetch('./assets/goblin-speech.m4a')
+    .then(r => r.arrayBuffer())
+    .then(buf => audioCtx.decodeAudioData(buf))
+    .then(decoded => { audioBuffer = decoded })
+    .catch(console.error)
+
+  const playAudio = () => {
+    if (audioPlayed || !audioBuffer || audioCtx.state !== 'running') return
+    audioPlayed = true
+    const src = audioCtx.createBufferSource()
+    src.buffer = audioBuffer
+    src.connect(audioCtx.destination)
+    src.start(0)
   }
 
-  const unlockAudio = () => {
-    if (unlocked) return
-    audio.muted = true
-    audio.play().then(() => {
-      audio.pause()
-      audio.currentTime = 0
-      unlocked = true
-      tryPlay()
-    }).catch(() => {
-      unlocked = true
-      tryPlay()
-    })
-  }
-
-  document.addEventListener('touchstart', unlockAudio, {once: true, capture: true})
-  document.addEventListener('click', unlockAudio, {once: true, capture: true})
+  // Resume AudioContext on first touch (landing page tap unlocks it)
+  document.addEventListener('touchstart', () => {
+    audioCtx.resume()
+  }, {once: true, capture: true})
 
   XR8.addCameraPipelineModule({
     name: 'goblin-systems',
@@ -42,10 +39,7 @@ const onxrloaded = () => {
     },
     onReality: {
       ready: () => {
-        setTimeout(() => {
-          arReady = true
-          tryPlay()
-        }, 2000)
+        setTimeout(playAudio, 2500)
       },
     },
   })
