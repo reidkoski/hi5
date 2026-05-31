@@ -1,50 +1,42 @@
 import * as ecs from '@8thwall/ecs'
 
-const WALK_READY = 'walk-ready'
+// Camera position is set each frame by app.js via XR8's onUpdate pipeline
+declare const window: Window & {_camPos?: {x: number; y: number; z: number}}
 
 ecs.registerComponent({
   name: 'walk-toward-camera',
   schema: {
-    camera: 'eid',
     speed: ecs.f32,
     stopDistance: ecs.f32,
-    startDelay: ecs.f32,   // seconds to wait before walking (let intro finish)
+    startDelay: ecs.f32,
   },
   stateMachine: ({world, eid, schemaAttribute, defineState}) => {
-    let elapsed = 0
+    let startTime: number | null = null
+    let posX = 0
+    let posZ = 0
 
-    defineState('waiting')
-      .initial()
-      .onEvent(WALK_READY, 'walking', {target: eid})
-      .onTick(() => {
-        elapsed += world.time?.delta ?? 16
-        if (elapsed >= schemaAttribute.get(eid).startDelay * 1000) {
-          world.events.dispatch(eid, WALK_READY)
-        }
-      })
+    defineState('active').initial().onTick(() => {
+      if (startTime === null) startTime = Date.now()
 
-    defineState('walking').onTick(() => {
-      const {camera: camEid, speed, stopDistance} = schemaAttribute.get(eid)
-      if (!camEid) return
+      const {speed, stopDistance, startDelay} = schemaAttribute.get(eid)
+      if (Date.now() - startTime < startDelay * 1000) return
 
-      const gPos = world.getEntity(eid).getLocalPosition()
-      const cPos = world.getEntity(camEid).getLocalPosition()
-      if (!gPos || !cPos) return
+      const cam = window._camPos
+      if (!cam) return
 
-      const dx = cPos.x - gPos.x
-      const dz = cPos.z - gPos.z
+      const dx = cam.x - posX
+      const dz = cam.z - posZ
       const dist = Math.sqrt(dx * dx + dz * dz)
       if (dist <= stopDistance) return
 
       const nx = dx / dist
       const nz = dz / dist
-      const dt = (world.time?.delta ?? 16) / 1000
+      const dt = Math.min((world.time?.delta ?? 16) / 1000, 0.1)
 
-      world.getEntity(eid).setLocalPosition({
-        x: gPos.x + nx * speed * dt,
-        y: 0,
-        z: gPos.z + nz * speed * dt,
-      })
+      posX += nx * speed * dt
+      posZ += nz * speed * dt
+
+      world.getEntity(eid).setLocalPosition({x: posX, y: 0, z: posZ})
       world.getEntity(eid).set(ecs.Quaternion, ecs.math.quat.yRadians(Math.atan2(nx, nz)))
     })
   },

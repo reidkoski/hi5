@@ -1,8 +1,8 @@
+window._camPos = null
+
 const onxrloaded = () => {
   XR8.addCameraPipelineModule(LandingPage.pipelineModule())
-  LandingPage.configure({
-    mediaSrc: './assets/preview.jpg'
-  })
+  LandingPage.configure({mediaSrc: './assets/preview.jpg'})
 
   const audio = new Audio('./assets/goblin-speech.m4a')
   audio.preload = 'auto'
@@ -16,9 +16,6 @@ const onxrloaded = () => {
     }
   }
 
-  // iOS requires audio to be triggered from a direct user gesture.
-  // Play muted during the landing page tap to unlock the audio context,
-  // then unmute and play for real once AR is ready.
   const unlockAudio = () => {
     if (unlocked) return
     audio.muted = true
@@ -28,7 +25,7 @@ const onxrloaded = () => {
       unlocked = true
       tryPlay()
     }).catch(() => {
-      unlocked = true  // mark unlocked anyway and hope for the best
+      unlocked = true
       tryPlay()
     })
   }
@@ -37,10 +34,14 @@ const onxrloaded = () => {
   document.addEventListener('click', unlockAudio, {once: true, capture: true})
 
   XR8.addCameraPipelineModule({
-    name: 'goblin-audio',
+    name: 'goblin-systems',
+    onUpdate: ({processCpuResult}) => {
+      if (processCpuResult?.reality?.position) {
+        window._camPos = processCpuResult.reality.position
+      }
+    },
     onReality: {
       ready: () => {
-        // Small delay so SLAM stabilises and intro animation plays first
         setTimeout(() => {
           arReady = true
           tryPlay()

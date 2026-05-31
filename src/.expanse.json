@@ -170,10 +170,6 @@
           "id": "d3f8a1b2-c4e5-6789-abcd-ef0123456789",
           "name": "walk-toward-camera",
           "parameters": {
-            "camera": {
-              "type": "entity",
-              "id": "52ba8a86-a459-4df8-b954-a570e85e0484"
-            },
             "speed": 0.4,
             "stopDistance": 2.0,
             "startDelay": 2.5
