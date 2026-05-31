@@ -1,0 +1,225 @@
+{
+  "objects": {
+    "492cfe2c-9334-4a9c-a48a-be80132af9fb": {
+      "id": "492cfe2c-9334-4a9c-a48a-be80132af9fb",
+      "position": [5, 25, 5],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1],
+      "geometry": null,
+      "material": null,
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {},
+      "light": {
+        "type": "directional",
+        "shadowBias": 0,
+        "shadowRadius": 2,
+        "followCamera": false,
+        "shadowCamera": [-10, 10, 10, -10, 0.5, 200]
+      },
+      "name": "Directional Light",
+      "order": 0.6785011504707911
+    },
+    "87113aa9-b52e-4fba-b937-63fbec393fa9": {
+      "id": "87113aa9-b52e-4fba-b937-63fbec393fa9",
+      "position": [10, 5, 5],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1],
+      "geometry": null,
+      "material": null,
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {},
+      "light": {
+        "type": "ambient",
+        "intensity": 1
+      },
+      "name": "Ambient Light",
+      "order": 1.2491958667939822
+    },
+    "52ba8a86-a459-4df8-b954-a570e85e0484": {
+      "id": "52ba8a86-a459-4df8-b954-a570e85e0484",
+      "position": [0, 2, 3.211226375221431],
+      "rotation": [
+        -0.0004637899966810532,
+        0.9978406073902779,
+        -0.06529682289718859,
+        -0.007087458033270938
+      ],
+      "scale": [1.0000000000000002, 1, 1.0000000000000004],
+      "geometry": null,
+      "material": null,
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {},
+      "name": "Camera",
+      "camera": {
+        "type": "perspective",
+        "xr": {
+          "xrCameraType": "world",
+          "phone": "AR",
+          "desktop": "disabled",
+          "headset": "disabled"
+        }
+      },
+      "order": 2.1029089692509704
+    },
+    "c7231d72-b7a3-44ea-b5f5-bb9ea9572ed9": {
+      "id": "c7231d72-b7a3-44ea-b5f5-bb9ea9572ed9",
+      "position": [0, 10.938518268367439, -2.5468804365107705],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1],
+      "geometry": null,
+      "material": null,
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {
+        "f31ef85b-8c9e-41ca-817f-a53bb7000a2d": {
+          "id": "f31ef85b-8c9e-41ca-817f-a53bb7000a2d",
+          "name": "hide-on-ready",
+          "parameters": {}
+        }
+      },
+      "ui": {
+        "flexDirection": "row",
+        "width": "100%",
+        "height": "100%",
+        "type": "overlay",
+        "background": "#000000",
+        "backgroundOpacity": 1,
+        "alignItems": "center",
+        "justifyContent": "center",
+        "stackingOrder": 100
+      },
+      "name": "Loading Screen",
+      "order": 16.570036688545937
+    },
+    "2f4186f0-5825-4b3c-868a-24bc7945a328": {
+      "id": "2f4186f0-5825-4b3c-868a-24bc7945a328",
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1],
+      "geometry": null,
+      "material": null,
+      "parentId": "c7231d72-b7a3-44ea-b5f5-bb9ea9572ed9",
+      "components": {},
+      "ui": {
+        "width": 200,
+        "height": 200,
+        "text": "Camera Loading",
+        "color": "#ffffff",
+        "fontSize": 24,
+        "type": "3d",
+        "font": {
+          "type": "font",
+          "font": "Roboto"
+        },
+        "textAlign": "center",
+        "verticalTextAlign": "center"
+      },
+      "name": "Text",
+      "order": 1.9632252822400198
+    },
+    "bc7753ae-2b39-4f48-910a-7921b756487b": {
+      "id": "bc7753ae-2b39-4f48-910a-7921b756487b",
+      "position": [0, 0, 0],
+      "rotation": [-0.7071068, 0, 0, 0.7071068],
+      "scale": [50, 50, 50],
+      "geometry": {
+        "type": "plane",
+        "width": 1,
+        "height": 1
+      },
+      "material": {
+        "type": "shadow",
+        "color": "#000000",
+        "opacity": 0.4
+      },
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {},
+      "name": "Ground",
+      "order": 5.877553308364804,
+      "shadow": {
+        "receiveShadow": true
+      }
+    },
+    "17af117a-efce-48dd-857e-e383a3649c7b": {
+      "id": "17af117a-efce-48dd-857e-e383a3649c7b",
+      "position": [0, -0.01, 0],
+      "rotation": [-0.707106799999999, 0, 0, 0.7071067623730954],
+      "scale": [50, 50, 50],
+      "geometry": {
+        "type": "plane",
+        "width": 1,
+        "height": 1
+      },
+      "material": {
+        "type": "hider"
+      },
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {},
+      "name": "Hider",
+      "order": 7.322553197845954
+    },
+    "95b58dcb-9e2c-4f1c-beb8-a906c41d4ef2": {
+      "id": "95b58dcb-9e2c-4f1c-beb8-a906c41d4ef2",
+      "position": [0, 0, 0],
+      "rotation": [0, 0, 0, 1],
+      "scale": [1, 1, 1],
+      "geometry": null,
+      "material": null,
+      "parentId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "components": {
+        "d3f8a1b2-c4e5-6789-abcd-ef0123456789": {
+          "id": "d3f8a1b2-c4e5-6789-abcd-ef0123456789",
+          "name": "walk-toward-camera",
+          "parameters": {
+            "camera": {
+              "type": "entity",
+              "id": "52ba8a86-a459-4df8-b954-a570e85e0484"
+            },
+            "speed": 0.4,
+            "stopDistance": 2.0,
+            "startDelay": 2.5
+          }
+        },
+        "e4a9b3c1-d2e5-4789-bcde-f01234567890": {
+          "id": "e4a9b3c1-d2e5-4789-bcde-f01234567890",
+          "name": "position-animation",
+          "parameters": {
+            "fromY": -1.5,
+            "toY": 0,
+            "loop": false,
+            "easeOut": true,
+            "easingFunction": "Elastic",
+            "duration": 2000
+          }
+        }
+      },
+      "gltfModel": {
+        "src": {
+          "type": "asset",
+          "asset": "assets/goblin-walk.glb"
+        },
+        "animationClip": "Armature|clip0|baselayer",
+        "loop": true
+      },
+      "name": "Gloomwing Goblin",
+      "order": 17.975890353169696,
+      "shadow": {
+        "castShadow": true
+      }
+    }
+  },
+  "spaces": {
+    "84028e73-ee70-412d-b8d4-c09bf07c655c": {
+      "id": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+      "name": "Default",
+      "activeCamera": "52ba8a86-a459-4df8-b954-a570e85e0484"
+    }
+  },
+  "entrySpaceId": "84028e73-ee70-412d-b8d4-c09bf07c655c",
+  "runtimeVersion": {
+    "type": "version",
+    "level": "major",
+    "major": 2,
+    "minor": 0,
+    "patch": 0
+  }
+}
