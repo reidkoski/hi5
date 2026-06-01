@@ -99,28 +99,33 @@ const onxrloaded = () => {
   document.addEventListener('pointerdown', () => { dbg('pointerdown fired'); unlockAudio() }, {once: true, capture: true})
   document.addEventListener('click', () => { dbg('click fired'); unlockAudio() }, {once: true, capture: true})
 
+  // onReality.ready doesn't fire in 8th Wall ECS v2 pipeline modules, so we
+  // detect reality-ready by watching for the first camera position in onUpdate.
+  let realityReadyFired = false
+  const onRealityReady = () => {
+    realityReadyAt = Date.now()
+    dbg(`reality ready (via onUpdate) — scheduling tryPlayAudio in ${speechDelayMs}ms`)
+    setTimeout(tryPlayAudio, speechDelayMs)
+
+    // Show scan prompt, fade out just before goblin starts walking (startDelay 4.0s).
+    const prompt = document.getElementById('scan-prompt')
+    if (prompt) {
+      prompt.style.opacity = '1'
+      setTimeout(() => { prompt.style.opacity = '0' }, 3200)
+      setTimeout(() => { prompt.remove() }, 3800)
+    }
+  }
+
   XR8.addCameraPipelineModule({
     name: 'goblin-systems',
     onUpdate: ({processCpuResult}) => {
       if (processCpuResult?.reality?.position) {
         window._camPos = processCpuResult.reality.position
-      }
-    },
-    onReality: {
-      ready: () => {
-        realityReadyAt = Date.now()
-        dbg(`REALITY_READY — scheduling tryPlayAudio in ${speechDelayMs}ms`)
-        setTimeout(tryPlayAudio, speechDelayMs)
-
-        // Show scan prompt immediately, then fade it out just before the goblin
-        // starts walking (startDelay is 4.0s, so fade begins at 3.2s).
-        const prompt = document.getElementById('scan-prompt')
-        if (prompt) {
-          prompt.style.opacity = '1'
-          setTimeout(() => { prompt.style.opacity = '0' }, 3200)
-          setTimeout(() => { prompt.remove() }, 3800)
+        if (!realityReadyFired) {
+          realityReadyFired = true
+          onRealityReady()
         }
-      },
+      }
     },
   })
 }
