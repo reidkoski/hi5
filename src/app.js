@@ -99,13 +99,21 @@ const onxrloaded = () => {
   document.addEventListener('pointerdown', () => { dbg('pointerdown fired'); unlockAudio() }, {once: true, capture: true})
   document.addEventListener('click', () => { dbg('click fired'); unlockAudio() }, {once: true, capture: true})
 
+  // Audio is triggered by goblin-sequence dispatching 'goblin-speech-start'
+  // when the goblin is halfway through its walk-toward-camera phase.
+  // A fallback timer fires 12s after reality-ready in case the event is missed.
+  window.addEventListener('goblin-speech-start', () => {
+    dbg('goblin-speech-start event → tryPlayAudio')
+    tryPlayAudio()
+  }, {once: true})
+
   // onReality.ready doesn't fire in 8th Wall ECS v2 pipeline modules, so we
   // detect reality-ready by watching for the first camera position in onUpdate.
   let realityReadyFired = false
   const onRealityReady = () => {
     realityReadyAt = Date.now()
-    dbg(`reality ready (via onUpdate) — scheduling tryPlayAudio in ${speechDelayMs}ms`)
-    setTimeout(tryPlayAudio, speechDelayMs)
+    dbg(`reality ready (via onUpdate)`)
+    setTimeout(tryPlayAudio, 12000) // fallback only
 
     // Show scan prompt, fade out just before goblin starts walking (startDelay 4.0s).
     const prompt = document.getElementById('scan-prompt')
