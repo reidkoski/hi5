@@ -2,39 +2,39 @@ import * as ecs from '@8thwall/ecs'
 
 declare const window: Window & {_camPos?: {x: number; y: number; z: number}}
 
-// ── Animation clip names (from GLB inspection) ──────────────────────────────
-const CLIPS = {
-  fall: 'Armature|Fall_from_Bar|baselayer',
-  walk: 'Armature|Monster_Walk|baselayer',
-  idle: 'Armature|Idle_9|baselayer',
-  scan: 'Armature|Walking_Scan_with_Sudden_Look_Back|baselayer',
-  run:  'Armature|running|baselayer',
-}
+// ── Per-phase marker components (one on each phase entity in the scene) ──────
+// The sequence controller queries these to find and show/hide the right mesh.
+const FallPhase = ecs.registerComponent({name: 'bat-phase-fall'})
+const WalkPhase = ecs.registerComponent({name: 'bat-phase-walk'})
+const IdlePhase = ecs.registerComponent({name: 'bat-phase-idle'})
+const ScanPhase = ecs.registerComponent({name: 'bat-phase-scan'})
+const RunPhase  = ecs.registerComponent({name: 'bat-phase-run'})
 
-const ASSETS = {
-  fall: 'assets/bat-fall.glb',
-  walk: 'assets/bat-walk.glb',
-  idle: 'assets/bat-idle.glb',
-  scan: 'assets/bat-scan.glb',
-  run:  'assets/bat-run.glb',
-}
+const fallQ = ecs.defineQuery([FallPhase])
+const walkQ = ecs.defineQuery([WalkPhase])
+const idleQ = ecs.defineQuery([IdlePhase])
+const scanQ = ecs.defineQuery([ScanPhase])
+const runQ  = ecs.defineQuery([RunPhase])
 
-// Fixed durations (ms) derived from animation lengths
-const FALL_MS  = 1400   // Fall_from_Bar  1.367s
-const SCAN_MS  = 6800   // Walking_Scan   6.767s
-const IDLE_MS  = 10000  // idle + talk buffer (audio is 8.62s, speech starts mid-walk)
+// ── Phase durations (ms, from GLB animation inspection) ──────────────────────
+const FALL_MS = 1400   // Fall_from_Bar  1.367 s
+const IDLE_MS = 10000  // idle/talk buffer — audio is 8.62 s, speech fires mid-walk
+const SCAN_MS = 6800   // Walking_Scan_with_Sudden_Look_Back  6.767 s
 
-type Phase = 'falling' | 'walking' | 'idle' | 'leaving' | 'rushing' | 'gone'
+type Phase = 'waiting' | 'falling' | 'walking' | 'idle' | 'leaving' | 'rushing' | 'gone'
 
+// ── Controller component (attach to an invisible entity in the scene) ─────────
 ecs.registerComponent({
   name: 'goblin-sequence',
   schema: {
+    startDelay:   ecs.f32,   // ms to wait after SLAM ready before falling in
     walkSpeed:    ecs.f32,
     stopDistance: ecs.f32,
     rushSpeed:    ecs.f32,
-    rushDistance: ecs.f32,
+    rushDistance: ecs.f32,   // distance at which goblin vanishes during rush
   },
   schemaDefaults: {
+    startDelay:   4000,
     walkSpeed:    0.4,
     stopDistance: 2.5,
     rushSpeed:    2.5,
@@ -42,25 +42,25 @@ ecs.registerComponent({
   },
 
   stateMachine: ({world, eid, schemaAttribute, defineState}) => {
-    // ── position state ───────────────────────────────────────────────────────
+    // ── shared position state ─────────────────────────────────────────────────
     const localPos = ecs.math.vec3.zero()
     let posX = 0
     let posZ = 0
     let landingY = 0
 
-    // smoothed camera
+    // smoothed camera position (reduces SLAM jitter)
     let smoothCamX = 0
     let smoothCamZ = 0
     let camReady = false
 
     // phase bookkeeping
-    let phase: Phase = 'falling'
+    let phase: Phase = 'waiting'
     let phaseStart = 0
     let initialized = false
     let speechFired = false
     let walkStartDist = 0
 
-    // ── helpers ──────────────────────────────────────────────────────────────
+    // ── helpers ───────────────────────────────────────────────────────────────
     const getCam = () => {
       const c = window._camPos ?? {x: 0, y: 0, z: 0}
       if (!camReady) { smoothCamX = c.x; smoothCamZ = c.z; camReady = true }
@@ -69,49 +69,46 @@ ecs.registerComponent({
       return {x: smoothCamX, z: smoothCamZ}
     }
 
-    const faceDir = (dx: number, dz: number) => {
-      world.getEntity(eid).set(ecs.Quaternion, ecs.math.quat.yRadians(Math.atan2(dx, dz)))
+    const faceDir = (activeEid: ecs.Eid, dx: number, dz: number) => {
+      world.getEntity(activeEid).set(ecs.Quaternion, ecs.math.quat.yRadians(Math.atan2(dx, dz)))
     }
 
-    const setModel = (src: string, clip: string, loop: boolean) => {
-      ;(ecs.GltfModel as any).set(world, eid, {url: src, animationClip: clip, loop})
+    // Returns the mesh entity for a given phase, or undefined
+    const phaseEid = (p: Phase): ecs.Eid | undefined => {
+      if (p === 'falling') return fallQ(world)[0]
+      if (p === 'walking') return walkQ(world)[0]
+      if (p === 'idle')    return idleQ(world)[0]
+      if (p === 'leaving') return scanQ(world)[0]
+      if (p === 'rushing') return runQ(world)[0]
+      return undefined
     }
 
-    const dt = () => Math.min((world.time?.delta ?? 16) / 1000, 0.1)
+    const enterPhase = (next: Phase) => {
+      // hide outgoing mesh
+      const outEid = phaseEid(phase)
+      if (outEid != null) world.getEntity(outEid).hide()
 
-    const enterPhase = (p: Phase) => {
-      phase = p
+      phase = next
       phaseStart = Date.now()
-      switch (p) {
-        case 'falling':
-          setModel(ASSETS.fall, CLIPS.fall, false)
-          break
-        case 'walking':
-          walkStartDist = (() => {
-            const cam = getCam()
-            const dx = cam.x - posX
-            const dz = cam.z - posZ
-            return Math.sqrt(dx * dx + dz * dz)
-          })()
-          speechFired = false
-          setModel(ASSETS.walk, CLIPS.walk, true)
-          break
-        case 'idle':
-          setModel(ASSETS.idle, CLIPS.idle, true)
-          break
-        case 'leaving':
-          setModel(ASSETS.scan, CLIPS.scan, false)
-          break
-        case 'rushing':
-          setModel(ASSETS.run, CLIPS.run, true)
-          break
-        case 'gone':
-          world.getEntity(eid).hide()
-          break
+
+      if (next === 'gone') return
+
+      const inEid = phaseEid(next)
+      if (inEid == null) return
+
+      if (next === 'walking') {
+        const cam = getCam()
+        const dx = cam.x - posX
+        const dz = cam.z - posZ
+        walkStartDist = Math.sqrt(dx * dx + dz * dz)
+        speechFired = false
       }
+
+      world.getEntity(inEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+      world.getEntity(inEid).show()
     }
 
-    // ── single tick state ────────────────────────────────────────────────────
+    // ── single ECS state, internal phase switch ───────────────────────────────
     defineState('active').initial().onTick(() => {
       if (!initialized) {
         world.transform.getLocalPosition(eid, localPos)
@@ -119,77 +116,89 @@ ecs.registerComponent({
         posZ = localPos.z
         landingY = localPos.y
         initialized = true
-        enterPhase('falling')
+        phaseStart = Date.now()
+        // 'waiting' phase already set — no mesh shown yet
         return
       }
 
       const elapsed = Date.now() - phaseStart
+      const {startDelay, walkSpeed, stopDistance, rushSpeed, rushDistance} = schemaAttribute.get(eid)
+      const dt = Math.min((world.time?.delta ?? 16) / 1000, 0.1)
       const cam = getCam()
-      const {walkSpeed, stopDistance, rushSpeed, rushDistance} = schemaAttribute.get(eid)
-      const d = dt()
+
+      // ── waiting for scan prompt to clear ─────────────────────────────────
+      if (phase === 'waiting') {
+        if (elapsed >= startDelay) enterPhase('falling')
+        return
+      }
+
+      const aEid = phaseEid(phase)
 
       switch (phase) {
 
-        // ── fall ─────────────────────────────────────────────────────────────
+        // ── fall from above ────────────────────────────────────────────────
         case 'falling': {
           if (elapsed >= FALL_MS) enterPhase('walking')
           break
         }
 
-        // ── monster walk toward camera ────────────────────────────────────────
+        // ── monster-walk toward camera ─────────────────────────────────────
         case 'walking': {
+          if (aEid == null) break
           const dx = cam.x - posX
           const dz = cam.z - posZ
           const dist = Math.sqrt(dx * dx + dz * dz)
 
-          // fire speech event when goblin is ~halfway through its approach
+          // dispatch speech event when ~halfway through the approach
           if (!speechFired && walkStartDist > 0 && dist < walkStartDist * 0.55) {
             speechFired = true
             window.dispatchEvent(new CustomEvent('goblin-speech-start'))
           }
 
           if (dist <= stopDistance) {
-            world.getEntity(eid).setLocalPosition({x: posX, y: landingY, z: posZ})
-            faceDir(dx, dz)
+            world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+            faceDir(aEid, dx, dz)
             enterPhase('idle')
             break
           }
 
           const nx = dx / dist
           const nz = dz / dist
-          posX += nx * walkSpeed * d
-          posZ += nz * walkSpeed * d
-          world.getEntity(eid).setLocalPosition({x: posX, y: landingY, z: posZ})
-          faceDir(nx, nz)
+          posX += nx * walkSpeed * dt
+          posZ += nz * walkSpeed * dt
+          world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+          faceDir(aEid, nx, nz)
           break
         }
 
-        // ── idle / talking ────────────────────────────────────────────────────
+        // ── idle / talking ─────────────────────────────────────────────────
         case 'idle': {
-          faceDir(cam.x - posX, cam.z - posZ)
+          if (aEid == null) break
+          world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+          faceDir(aEid, cam.x - posX, cam.z - posZ)
           if (elapsed >= IDLE_MS) enterPhase('leaving')
           break
         }
 
-        // ── scan + walk away ─────────────────────────────────────────────────
+        // ── scan + walk away ───────────────────────────────────────────────
         case 'leaving': {
+          if (aEid == null) break
           const dx = posX - cam.x
           const dz = posZ - cam.z
           const dist = Math.sqrt(dx * dx + dz * dz)
           if (dist > 0.01) {
-            const nx = dx / dist
-            const nz = dz / dist
-            posX += nx * walkSpeed * d
-            posZ += nz * walkSpeed * d
-            world.getEntity(eid).setLocalPosition({x: posX, y: landingY, z: posZ})
-            faceDir(nx, nz)
+            posX += (dx / dist) * walkSpeed * dt
+            posZ += (dz / dist) * walkSpeed * dt
+            world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+            faceDir(aEid, dx / dist, dz / dist)
           }
           if (elapsed >= SCAN_MS) enterPhase('rushing')
           break
         }
 
-        // ── sprint toward camera, get very close, vanish ──────────────────────
+        // ── sprint at camera, vanish when very close ───────────────────────
         case 'rushing': {
+          if (aEid == null) break
           const dx = cam.x - posX
           const dz = cam.z - posZ
           const dist = Math.sqrt(dx * dx + dz * dz)
@@ -201,10 +210,10 @@ ecs.registerComponent({
 
           const nx = dx / dist
           const nz = dz / dist
-          posX += nx * rushSpeed * d
-          posZ += nz * rushSpeed * d
-          world.getEntity(eid).setLocalPosition({x: posX, y: landingY, z: posZ})
-          faceDir(nx, nz)
+          posX += nx * rushSpeed * dt
+          posZ += nz * rushSpeed * dt
+          world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+          faceDir(aEid, nx, nz)
           break
         }
 
