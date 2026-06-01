@@ -40,7 +40,16 @@ const onxrloaded = () => {
     .catch(console.error)
 
   const unlockAudio = () => {
-    audioCtx.resume().then(tryPlayAudio).catch(console.error)
+    audioCtx.resume().then(() => {
+      // Play a silent 1-sample buffer — permanently activates Web Audio on iOS,
+      // preventing the context from auto-suspending before the speech fires.
+      const silentBuf = audioCtx.createBuffer(1, 1, 22050)
+      const silentSrc = audioCtx.createBufferSource()
+      silentSrc.buffer = silentBuf
+      silentSrc.connect(audioCtx.destination)
+      silentSrc.start(0)
+      tryPlayAudio()
+    }).catch(console.error)
   }
 
   // Resume AudioContext on first interaction. The landing page tap usually unlocks it on mobile.
@@ -59,6 +68,15 @@ const onxrloaded = () => {
       ready: () => {
         realityReadyAt = Date.now()
         setTimeout(tryPlayAudio, speechDelayMs)
+
+        // Show scan prompt immediately, then fade it out just before the goblin
+        // starts walking (startDelay is 4.0s, so fade begins at 3.2s).
+        const prompt = document.getElementById('scan-prompt')
+        if (prompt) {
+          prompt.style.opacity = '1'
+          setTimeout(() => { prompt.style.opacity = '0' }, 3200)
+          setTimeout(() => { prompt.remove() }, 3800)
+        }
       },
     },
   })
