@@ -6,63 +6,64 @@ declare const window: Window & {
 }
 const log = (msg: string) => { if (window._dbg) window._dbg('[seq] ' + msg) }
 
-// ── Per-phase marker components (one on each phase entity in the scene) ──────
-// The sequence controller queries these to find and show/hide the right mesh.
+// ── Per-phase marker components ───────────────────────────────────────────────
 const FallPhase = ecs.registerComponent({name: 'bat-phase-fall'})
 const WalkPhase = ecs.registerComponent({name: 'bat-phase-walk'})
 const IdlePhase = ecs.registerComponent({name: 'bat-phase-idle'})
-const ScanPhase = ecs.registerComponent({name: 'bat-phase-scan'})
 const RunPhase  = ecs.registerComponent({name: 'bat-phase-run'})
+// bat-phase-scan still registered so the scene entity doesn't error
+ecs.registerComponent({name: 'bat-phase-scan'})
 
 const fallQ = ecs.defineQuery([FallPhase])
 const walkQ = ecs.defineQuery([WalkPhase])
 const idleQ = ecs.defineQuery([IdlePhase])
-const scanQ = ecs.defineQuery([ScanPhase])
 const runQ  = ecs.defineQuery([RunPhase])
 
-// ── Phase durations (ms, from GLB animation inspection) ──────────────────────
-const FALL_MS = 1400   // Fall_from_Bar  1.367 s
-const IDLE_MS = 10000  // idle/talk buffer — audio is 8.62 s, speech fires mid-walk
-const SCAN_MS = 6800   // Walking_Scan_with_Sudden_Look_Back  6.767 s
+// ── Timing constants ──────────────────────────────────────────────────────────
+const FALL_MS     = 1400   // Fall_from_Bar animation length
+const FALL_HEIGHT = 3.0    // metres above ground the bat starts — sells the "from sky" drop
+const IDLE_MS     = 20000  // generous fallback; rush is normally event-driven
 
-type Phase = 'waiting' | 'falling' | 'walking' | 'idle' | 'leaving' | 'rushing' | 'gone'
+type Phase = 'waiting' | 'falling' | 'walking' | 'idle' | 'rushing' | 'gone'
 
-// ── Controller component (attach to an invisible entity in the scene) ─────────
 ecs.registerComponent({
   name: 'goblin-sequence',
   schema: {
-    startDelay:   ecs.f32,   // ms to wait after SLAM ready before falling in
+    startDelay:   ecs.f32,
     walkSpeed:    ecs.f32,
     stopDistance: ecs.f32,
     rushSpeed:    ecs.f32,
-    rushDistance: ecs.f32,   // distance at which goblin vanishes during rush
+    rushDistance: ecs.f32,
   },
   schemaDefaults: {
-    startDelay:   4000,
-    walkSpeed:    0.4,
-    stopDistance: 2.5,
+    startDelay:   2000,   // ms after SLAM ready — bat falls in while scan prompt is fading
+    walkSpeed:    0.65,   // m/s — faster = less dead time
+    stopDistance: 2.0,    // m — stop closer so idle kicks in sooner
     rushSpeed:    2.5,
     rushDistance: 0.3,
   },
 
   stateMachine: ({world, eid, schemaAttribute, defineState}) => {
-    // ── shared position state ─────────────────────────────────────────────────
     const localPos = ecs.math.vec3.zero()
     let posX = 0
     let posZ = 0
     let landingY = 0
 
-    // smoothed camera position (reduces SLAM jitter)
     let smoothCamX = 0
     let smoothCamZ = 0
     let camReady = false
 
-    // phase bookkeeping
     let phase: Phase = 'waiting'
     let phaseStart = 0
     let initialized = false
     let speechFired = false
-    let walkStartDist = 0
+    let rushPending = false
+
+    // Listen for audio-driven rush trigger from app.js
+    window.addEventListener('goblin-rush', () => {
+      rushPending = true
+      log('goblin-rush received')
+    }, {once: true})
 
     // ── helpers ───────────────────────────────────────────────────────────────
     const getCam = () => {
@@ -73,16 +74,17 @@ ecs.registerComponent({
       return {x: smoothCamX, z: smoothCamZ}
     }
 
-    const faceDir = (activeEid: ecs.Eid, dx: number, dz: number) => {
+    const faceTowardCam = (activeEid: ecs.Eid) => {
+      const cam = getCam()
+      const dx = cam.x - posX
+      const dz = cam.z - posZ
       world.getEntity(activeEid).set(ecs.Quaternion, ecs.math.quat.yRadians(Math.atan2(dx, dz)))
     }
 
-    // Returns the mesh entity for a given phase, or undefined
     const phaseEid = (p: Phase): ecs.Eid | undefined => {
       if (p === 'falling') return fallQ(world)[0]
       if (p === 'walking') return walkQ(world)[0]
       if (p === 'idle')    return idleQ(world)[0]
-      if (p === 'leaving') return scanQ(world)[0]
       if (p === 'rushing') return runQ(world)[0]
       return undefined
     }
@@ -90,7 +92,6 @@ ecs.registerComponent({
     const enterPhase = (next: Phase) => {
       log(`enterPhase ${phase} → ${next}  pos=(${posX.toFixed(2)},${landingY.toFixed(2)},${posZ.toFixed(2)})`)
 
-      // hide outgoing mesh
       const outEid = phaseEid(phase)
       if (outEid != null) world.getEntity(outEid).hide()
 
@@ -105,26 +106,19 @@ ecs.registerComponent({
         return
       }
 
-      if (next === 'walking') {
-        const cam = getCam()
-        const dx = cam.x - posX
-        const dz = cam.z - posZ
-        walkStartDist = Math.sqrt(dx * dx + dz * dz)
-        speechFired = false
-        log(`walkStartDist=${walkStartDist.toFixed(2)}  cam=(${cam.x.toFixed(2)},${cam.z.toFixed(2)})`)
-      }
-
-      world.getEntity(inEid).setLocalPosition({x: posX, y: landingY, z: posZ})
+      // Fall phase: start high so the bat visibly drops from the sky
+      const spawnY = next === 'falling' ? landingY + FALL_HEIGHT : landingY
+      world.getEntity(inEid).setLocalPosition({x: posX, y: spawnY, z: posZ})
+      faceTowardCam(inEid)
       world.getEntity(inEid).show()
     }
 
-    // ── single ECS state, internal phase switch ───────────────────────────────
+    // ── main tick ─────────────────────────────────────────────────────────────
     defineState('active').initial().onTick(() => {
       if (!initialized) {
-        // Wait for SLAM to be live before reading transforms.
-        // getLocalPosition returns (0,0,0) on the very first ECS tick
-        // before entity positions are committed — reading too early puts
-        // the bat at the world origin (right in the user's face).
+        // Wait for SLAM: getLocalPosition returns (0,0,0) on the first ECS tick
+        // before entity transforms are committed — reading too early puts the bat
+        // at the world origin (right in the user's face).
         if (!window._camPos) return
         world.transform.getLocalPosition(eid, localPos)
         posX = localPos.x
@@ -133,7 +127,6 @@ ecs.registerComponent({
         initialized = true
         phaseStart = Date.now()
         log(`init  pos=(${posX.toFixed(2)},${landingY.toFixed(2)},${posZ.toFixed(2)})  cam=(${window._camPos.x.toFixed(2)},${window._camPos.z.toFixed(2)})`)
-        // 'waiting' phase already set — no mesh shown yet
         return
       }
 
@@ -142,7 +135,7 @@ ecs.registerComponent({
       const dt = Math.min((world.time?.delta ?? 16) / 1000, 0.1)
       const cam = getCam()
 
-      // ── waiting for scan prompt to clear ─────────────────────────────────
+      // ── waiting ───────────────────────────────────────────────────────────
       if (phase === 'waiting') {
         if (elapsed >= startDelay) enterPhase('falling')
         return
@@ -152,28 +145,36 @@ ecs.registerComponent({
 
       switch (phase) {
 
-        // ── fall from above ────────────────────────────────────────────────
+        // ── fall from sky ─────────────────────────────────────────────────
         case 'falling': {
+          if (aEid == null) break
+          // Smoothly descend from FALL_HEIGHT to ground during the animation
+          const t = Math.min(elapsed / FALL_MS, 1)
+          const ease = t * t * (3 - 2 * t)  // smoothstep
+          const currentY = landingY + FALL_HEIGHT * (1 - ease)
+          world.getEntity(aEid).setLocalPosition({x: posX, y: currentY, z: posZ})
           if (elapsed >= FALL_MS) enterPhase('walking')
           break
         }
 
-        // ── monster-walk toward camera ─────────────────────────────────────
+        // ── monster-walk toward camera ────────────────────────────────────
         case 'walking': {
           if (aEid == null) break
+
+          // Fire speech as soon as walking starts
+          if (!speechFired) {
+            speechFired = true
+            window.dispatchEvent(new CustomEvent('goblin-speech-start'))
+            log('goblin-speech-start fired')
+          }
+
           const dx = cam.x - posX
           const dz = cam.z - posZ
           const dist = Math.sqrt(dx * dx + dz * dz)
 
-          // dispatch speech event when ~halfway through the approach
-          if (!speechFired && walkStartDist > 0 && dist < walkStartDist * 0.55) {
-            speechFired = true
-            window.dispatchEvent(new CustomEvent('goblin-speech-start'))
-          }
-
           if (dist <= stopDistance) {
             world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
-            faceDir(aEid, dx, dz)
+            faceTowardCam(aEid)
             enterPhase('idle')
             break
           }
@@ -183,36 +184,21 @@ ecs.registerComponent({
           posX += nx * walkSpeed * dt
           posZ += nz * walkSpeed * dt
           world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
-          faceDir(aEid, nx, nz)
+          world.getEntity(aEid).set(ecs.Quaternion, ecs.math.quat.yRadians(Math.atan2(nx, nz)))
           break
         }
 
-        // ── idle / talking ─────────────────────────────────────────────────
+        // ── idle / talking ────────────────────────────────────────────────
         case 'idle': {
           if (aEid == null) break
           world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
-          faceDir(aEid, cam.x - posX, cam.z - posZ)
-          if (elapsed >= IDLE_MS) enterPhase('leaving')
+          faceTowardCam(aEid)
+          // Rush triggered by audio (0.5s before it ends), with a long fallback
+          if (rushPending || elapsed >= IDLE_MS) enterPhase('rushing')
           break
         }
 
-        // ── scan + walk away ───────────────────────────────────────────────
-        case 'leaving': {
-          if (aEid == null) break
-          const dx = posX - cam.x
-          const dz = posZ - cam.z
-          const dist = Math.sqrt(dx * dx + dz * dz)
-          if (dist > 0.01) {
-            posX += (dx / dist) * walkSpeed * dt
-            posZ += (dz / dist) * walkSpeed * dt
-            world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
-            faceDir(aEid, dx / dist, dz / dist)
-          }
-          if (elapsed >= SCAN_MS) enterPhase('rushing')
-          break
-        }
-
-        // ── sprint at camera, vanish when very close ───────────────────────
+        // ── sprint at camera — no walking-away phase ──────────────────────
         case 'rushing': {
           if (aEid == null) break
           const dx = cam.x - posX
@@ -229,7 +215,7 @@ ecs.registerComponent({
           posX += nx * rushSpeed * dt
           posZ += nz * rushSpeed * dt
           world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
-          faceDir(aEid, nx, nz)
+          world.getEntity(aEid).set(ecs.Quaternion, ecs.math.quat.yRadians(Math.atan2(nx, nz)))
           break
         }
 

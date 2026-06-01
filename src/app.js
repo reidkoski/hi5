@@ -62,6 +62,10 @@ const onxrloaded = () => {
     src.connect(audioCtx.destination)
     src.start(0)
     src.onended = () => dbg('audio ended')
+    // Tell goblin-sequence to start rushing 0.5 s before audio ends
+    const rushMs = Math.max(0, (audioBuffer.duration - 0.5) * 1000)
+    dbg(`rush scheduled in ${(rushMs / 1000).toFixed(1)}s  (audio ${audioBuffer.duration.toFixed(2)}s)`)
+    setTimeout(() => window.dispatchEvent(new CustomEvent('goblin-rush')), rushMs)
   }
 
   fetch('./assets/goblin-speech.m4a')
