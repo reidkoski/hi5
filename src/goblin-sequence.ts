@@ -1,6 +1,10 @@
 import * as ecs from '@8thwall/ecs'
 
-declare const window: Window & {_camPos?: {x: number; y: number; z: number}}
+declare const window: Window & {
+  _camPos?: {x: number; y: number; z: number}
+  _dbg?: (msg: string) => void
+}
+const log = (msg: string) => { if (window._dbg) window._dbg('[seq] ' + msg) }
 
 // ── Per-phase marker components (one on each phase entity in the scene) ──────
 // The sequence controller queries these to find and show/hide the right mesh.
@@ -84,6 +88,8 @@ ecs.registerComponent({
     }
 
     const enterPhase = (next: Phase) => {
+      log(`enterPhase ${phase} → ${next}  pos=(${posX.toFixed(2)},${landingY.toFixed(2)},${posZ.toFixed(2)})`)
+
       // hide outgoing mesh
       const outEid = phaseEid(phase)
       if (outEid != null) world.getEntity(outEid).hide()
@@ -94,7 +100,10 @@ ecs.registerComponent({
       if (next === 'gone') return
 
       const inEid = phaseEid(next)
-      if (inEid == null) return
+      if (inEid == null) {
+        log(`WARNING: no entity found for phase ${next}`)
+        return
+      }
 
       if (next === 'walking') {
         const cam = getCam()
@@ -102,6 +111,7 @@ ecs.registerComponent({
         const dz = cam.z - posZ
         walkStartDist = Math.sqrt(dx * dx + dz * dz)
         speechFired = false
+        log(`walkStartDist=${walkStartDist.toFixed(2)}  cam=(${cam.x.toFixed(2)},${cam.z.toFixed(2)})`)
       }
 
       world.getEntity(inEid).setLocalPosition({x: posX, y: landingY, z: posZ})
@@ -111,12 +121,18 @@ ecs.registerComponent({
     // ── single ECS state, internal phase switch ───────────────────────────────
     defineState('active').initial().onTick(() => {
       if (!initialized) {
+        // Wait for SLAM to be live before reading transforms.
+        // getLocalPosition returns (0,0,0) on the very first ECS tick
+        // before entity positions are committed — reading too early puts
+        // the bat at the world origin (right in the user's face).
+        if (!window._camPos) return
         world.transform.getLocalPosition(eid, localPos)
         posX = localPos.x
         posZ = localPos.z
         landingY = localPos.y
         initialized = true
         phaseStart = Date.now()
+        log(`init  pos=(${posX.toFixed(2)},${landingY.toFixed(2)},${posZ.toFixed(2)})  cam=(${window._camPos.x.toFixed(2)},${window._camPos.z.toFixed(2)})`)
         // 'waiting' phase already set — no mesh shown yet
         return
       }

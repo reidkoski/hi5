@@ -15,14 +15,16 @@ const dbg = (() => {
   document.addEventListener('DOMContentLoaded', () => document.body.appendChild(panel))
   // also add it immediately if DOM already ready
   if (document.body) document.body.appendChild(panel)
-  return msg => {
-    console.log('[audio]', msg)
+  const log = msg => {
+    console.log('[dbg]', msg)
     const t = new Date().toISOString().slice(11, 22)
     const line = document.createElement('div')
     line.textContent = `${t}  ${msg}`
     panel.appendChild(line)
     panel.scrollTop = panel.scrollHeight
   }
+  window._dbg = log   // expose for goblin-sequence.ts
+  return log
 })()
 
 const onxrloaded = () => {
