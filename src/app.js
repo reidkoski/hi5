@@ -1,5 +1,30 @@
 window._camPos = null
 
+// --- Audio debug overlay (append ?debug to the URL to enable) ---
+const DEBUG_AUDIO = new URLSearchParams(location.search).has('debug')
+const dbg = (() => {
+  if (!DEBUG_AUDIO) return () => {}
+  const panel = document.createElement('div')
+  panel.style.cssText = [
+    'position:fixed', 'bottom:0', 'left:0', 'right:0',
+    'max-height:40vh', 'overflow-y:auto',
+    'background:rgba(0,0,0,0.75)', 'color:#0f0',
+    'font:11px/1.4 monospace', 'padding:6px 8px',
+    'z-index:9999', 'pointer-events:none',
+  ].join(';')
+  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(panel))
+  // also add it immediately if DOM already ready
+  if (document.body) document.body.appendChild(panel)
+  return msg => {
+    console.log('[audio]', msg)
+    const t = new Date().toISOString().slice(11, 22)
+    const line = document.createElement('div')
+    line.textContent = `${t}  ${msg}`
+    panel.appendChild(line)
+    panel.scrollTop = panel.scrollHeight
+  }
+})()
+
 const onxrloaded = () => {
   XR8.addCameraPipelineModule(LandingPage.pipelineModule())
   LandingPage.configure({mediaSrc: './assets/preview.jpg'})
@@ -7,40 +32,56 @@ const onxrloaded = () => {
   // Web Audio API — more reliable than HTMLAudioElement on iOS
   const AudioCtx = window.AudioContext || window.webkitAudioContext
   const audioCtx = new AudioCtx()
+  dbg(`AudioContext created — state: ${audioCtx.state}`)
+
   let audioBuffer = null
   let audioPlayed = false
   let realityReadyAt = null
   const speechDelayMs = 2500
 
   const tryPlayAudio = () => {
+    dbg(`tryPlayAudio — played:${audioPlayed} buffer:${!!audioBuffer} readyAt:${!!realityReadyAt} ctxState:${audioCtx.state}`)
     if (audioPlayed || !audioBuffer || !realityReadyAt) return
     const waitMs = realityReadyAt + speechDelayMs - Date.now()
     if (waitMs > 0) {
+      dbg(`waiting ${waitMs}ms more before play`)
       setTimeout(tryPlayAudio, waitMs)
       return
     }
     if (audioCtx.state !== 'running') {
-      audioCtx.resume().then(tryPlayAudio).catch(console.error)
+      dbg(`ctx not running (${audioCtx.state}) — calling resume()`)
+      audioCtx.resume().then(tryPlayAudio).catch(e => dbg(`resume error: ${e}`))
       return
     }
+    dbg('PLAYING audio now')
     audioPlayed = true
     const src = audioCtx.createBufferSource()
     src.buffer = audioBuffer
     src.connect(audioCtx.destination)
     src.start(0)
+    src.onended = () => dbg('audio ended')
   }
 
   fetch('./assets/goblin-speech.m4a')
-    .then(r => r.arrayBuffer())
-    .then(buf => audioCtx.decodeAudioData(buf))
+    .then(r => {
+      dbg(`fetch ok — status ${r.status}`)
+      return r.arrayBuffer()
+    })
+    .then(buf => {
+      dbg(`arrayBuffer ready — ${buf.byteLength} bytes — decoding…`)
+      return audioCtx.decodeAudioData(buf)
+    })
     .then(decoded => {
+      dbg(`decode ok — duration ${decoded.duration.toFixed(2)}s`)
       audioBuffer = decoded
       tryPlayAudio()
     })
-    .catch(console.error)
+    .catch(e => dbg(`fetch/decode error: ${e}`))
 
   const unlockAudio = () => {
+    dbg(`unlockAudio — ctx state before resume: ${audioCtx.state}`)
     audioCtx.resume().then(() => {
+      dbg(`resume resolved — ctx state: ${audioCtx.state}`)
       // Play a silent 1-sample buffer — permanently activates Web Audio on iOS,
       // preventing the context from auto-suspending before the speech fires.
       const silentBuf = audioCtx.createBuffer(1, 1, 22050)
@@ -48,14 +89,15 @@ const onxrloaded = () => {
       silentSrc.buffer = silentBuf
       silentSrc.connect(audioCtx.destination)
       silentSrc.start(0)
+      dbg('silent buffer played')
       tryPlayAudio()
-    }).catch(console.error)
+    }).catch(e => dbg(`unlockAudio resume error: ${e}`))
   }
 
   // Resume AudioContext on first interaction. The landing page tap usually unlocks it on mobile.
-  document.addEventListener('touchstart', unlockAudio, {once: true, capture: true})
-  document.addEventListener('pointerdown', unlockAudio, {once: true, capture: true})
-  document.addEventListener('click', unlockAudio, {once: true, capture: true})
+  document.addEventListener('touchstart', () => { dbg('touchstart fired'); unlockAudio() }, {once: true, capture: true})
+  document.addEventListener('pointerdown', () => { dbg('pointerdown fired'); unlockAudio() }, {once: true, capture: true})
+  document.addEventListener('click', () => { dbg('click fired'); unlockAudio() }, {once: true, capture: true})
 
   XR8.addCameraPipelineModule({
     name: 'goblin-systems',
@@ -67,6 +109,7 @@ const onxrloaded = () => {
     onReality: {
       ready: () => {
         realityReadyAt = Date.now()
+        dbg(`REALITY_READY — scheduling tryPlayAudio in ${speechDelayMs}ms`)
         setTimeout(tryPlayAudio, speechDelayMs)
 
         // Show scan prompt immediately, then fade it out just before the goblin
