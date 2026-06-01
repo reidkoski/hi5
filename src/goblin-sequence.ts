@@ -20,9 +20,10 @@ const idleQ = ecs.defineQuery([IdlePhase])
 const runQ  = ecs.defineQuery([RunPhase])
 
 // ── Timing constants ──────────────────────────────────────────────────────────
-const FALL_MS     = 1400   // Fall_from_Bar animation length
-const FALL_HEIGHT = 3.0    // metres above ground the bat starts — sells the "from sky" drop
-const IDLE_MS     = 20000  // generous fallback; rush is normally event-driven
+const FALL_MS      = 1400   // Fall_from_Bar animation length
+const FALL_HEIGHT  = 3.0    // metres above ground the bat starts — sells the "from sky" drop
+const MAX_WALK_MS  = 4500   // hard cap on walk phase so idle always starts ~3.5s before rush
+const IDLE_MS      = 20000  // generous fallback; rush is normally event-driven
 
 type Phase = 'waiting' | 'falling' | 'walking' | 'idle' | 'rushing' | 'gone'
 
@@ -172,7 +173,7 @@ ecs.registerComponent({
           const dz = cam.z - posZ
           const dist = Math.sqrt(dx * dx + dz * dz)
 
-          if (dist <= stopDistance) {
+          if (dist <= stopDistance || elapsed >= MAX_WALK_MS) {
             world.getEntity(aEid).setLocalPosition({x: posX, y: landingY, z: posZ})
             faceTowardCam(aEid)
             enterPhase('idle')
